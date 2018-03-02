@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/draw"
 	"log"
+	"path/filepath"
 	"sort"
 
 	"github.com/fogleman/gg"
@@ -11,11 +12,10 @@ import (
 )
 
 var (
-	inputFile   = kingpin.Flag("input", "Input image.").Required().Short('i').ExistingFile()
-	outputFile  = kingpin.Flag("output", "Output image.").Required().Short('o').String()
-	windowSize  = kingpin.Flag("size", "Window size as a percentage.").Short('s').Default("0.05").Float64()
-	percentile  = kingpin.Flag("percentile", "Window percentile.").Short('p').Default("0.5").Float64()
+	windowSize  = kingpin.Flag("size", "Window size as a percentage.").Short('s').Default("5").Float64()
+	percentile  = kingpin.Flag("percentile", "Window percentile.").Short('p').Default("90").Float64()
 	targetValue = kingpin.Flag("target", "Target value when scaling output.").Short('t').Default("240").Int()
+	files       = kingpin.Arg("files", "Images to process.").Required().ExistingFiles()
 )
 
 func ensureGray(im image.Image) (*image.Gray, bool) {
@@ -41,15 +41,13 @@ func windowPercentile(im *image.Gray, r image.Rectangle, p float64) float64 {
 	return values[i]
 }
 
-func main() {
-	kingpin.Parse()
-
+func processFile(filename string) {
 	d := 0
-	s := *windowSize
-	p := *percentile
+	s := *windowSize / 100
+	p := *percentile / 100
 	t := float64(*targetValue)
 
-	src, err := gg.LoadImage(*inputFile)
+	src, err := gg.LoadImage(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,8 +86,18 @@ func main() {
 			i++
 		}
 	}
-	err = gg.SavePNG(*outputFile, im)
+	ext := filepath.Ext(filename)
+	basename := filename[:len(filename)-len(ext)]
+	outputFilename := basename + ".rbgg.png"
+	err = gg.SavePNG(outputFilename, im)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func main() {
+	kingpin.Parse()
+	for _, filename := range *files {
+		processFile(filename)
 	}
 }
