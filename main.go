@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/draw"
 	"log"
+	"math"
 	"path/filepath"
 	"sort"
 
@@ -41,6 +42,34 @@ func windowPercentile(im *image.Gray, r image.Rectangle, p float64) float64 {
 	return values[i]
 }
 
+func imagePercentile(im *image.Gray, p float64) int {
+	buf := make([]int, 256)
+	b := im.Bounds()
+	n := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		i := im.PixOffset(b.Min.X, y)
+		for x := b.Min.X; x < b.Max.X; x++ {
+			buf[im.Pix[i]]++
+			i++
+			n++
+		}
+	}
+	m := int(float64(n) * p)
+	for v, c := range buf {
+		m -= c
+		if m <= 0 {
+			return v
+		}
+	}
+	panic("oops")
+}
+
+func percentileAt(im *image.Gray, p float64, x, y, w, h int) int {
+	r := image.Rect(0, 0, w, h)
+	r = r.Add(image.Pt(x-w/2, y-h/2))
+	return imagePercentile(im.SubImage(r).(*image.Gray), p)
+}
+
 func processFile(filename string) {
 	d := 0
 	s := *windowSize / 100
@@ -52,13 +81,16 @@ func processFile(filename string) {
 		log.Fatal(err)
 	}
 	im, _ := ensureGray(src)
+	dst := image.NewGray(im.Bounds())
+	gradient := image.NewGray(im.Bounds())
 	w := im.Bounds().Size().X
 	h := im.Bounds().Size().Y
 	sx := int(float64(w)*s + 0.5)
 	sy := int(float64(h)*s + 0.5)
+	size := int(math.Sqrt(float64(w*h))*s + 0.5)
 	dx := w - (d+sx)*2
 	dy := h - (d+sy)*2
-	r00 := image.Rect(d, d, d+sx, d+sy)
+	r00 := image.Rect(d, d, d+size, d+size)
 	r10 := r00.Add(image.Pt(dx, 0))
 	r01 := r00.Add(image.Pt(0, dy))
 	r11 := r00.Add(image.Pt(dx, dy))
@@ -74,6 +106,7 @@ func processFile(filename string) {
 			ax0 := a00*(1-px) + a10*px
 			ax1 := a01*(1-px) + a11*px
 			a := ax0*(1-py) + ax1*py
+			a = float64(percentileAt(im, p, x, y, size, size))
 			v := float64(im.Pix[i])
 			v = (v / a) * t
 			if v < 0 {
@@ -82,14 +115,22 @@ func processFile(filename string) {
 			if v > 255 {
 				v = 255
 			}
-			im.Pix[i] = uint8(v)
+			dst.Pix[i] = uint8(v)
+			gradient.Pix[i] = uint8(a)
 			i++
 		}
 	}
 	ext := filepath.Ext(filename)
 	basename := filename[:len(filename)-len(ext)]
-	outputFilename := basename + ".rbgg.png"
-	err = gg.SavePNG(outputFilename, im)
+	err = gg.SavePNG(basename+".gray.png", im)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = gg.SavePNG(basename+".rbgg.png", dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = gg.SavePNG(basename+".grad.png", gradient)
 	if err != nil {
 		log.Fatal(err)
 	}
