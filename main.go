@@ -20,6 +20,16 @@ var (
 	files       = kingpin.Arg("files", "Images to process.").Required().ExistingFiles()
 )
 
+func timed(name string) func() {
+	if len(name) > 0 {
+		fmt.Printf("%s... ", name)
+	}
+	start := time.Now()
+	return func() {
+		fmt.Println(time.Since(start))
+	}
+}
+
 func ensureGray(im image.Image) (*image.Gray, bool) {
 	switch im := im.(type) {
 	case *image.Gray:
@@ -106,34 +116,19 @@ func columnPercentiles(im *image.Gray, p float64, x, r int) []int {
 	return result
 }
 
-// func imagePercentile(im *image.Gray, p float64) int {
-// 	hist := make([]int, 256)
-// 	b := im.Bounds()
-// 	n := 0
-// 	for y := b.Min.Y; y < b.Max.Y; y++ {
-// 		i := im.PixOffset(b.Min.X, y)
-// 		for x := b.Min.X; x < b.Max.X; x++ {
-// 			hist[im.Pix[i]]++
-// 			i++
-// 			n++
-// 		}
-// 	}
-// 	return histogramPercentile(hist, n, p)
-// }
-
-// func percentileAt(im *image.Gray, p float64, x, y, w, h int) int {
-// 	r := image.Rect(0, 0, w, h)
-// 	r = r.Add(image.Pt(x-w/2, y-h/2))
-// 	return imagePercentile(im.SubImage(r).(*image.Gray), p)
-// }
-func timed(name string) func() {
-	if len(name) > 0 {
-		fmt.Printf("%s... ", name)
+func imagePercentile(im *image.Gray, p float64) int {
+	hist := make([]int, 256)
+	b := im.Bounds()
+	n := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		i := im.PixOffset(b.Min.X, y)
+		for x := b.Min.X; x < b.Max.X; x++ {
+			hist[im.Pix[i]]++
+			i++
+			n++
+		}
 	}
-	start := time.Now()
-	return func() {
-		fmt.Println(time.Since(start))
-	}
+	return histogramPercentile(hist, n, p)
 }
 
 func processFile(filename string) {
@@ -156,6 +151,7 @@ func processFile(filename string) {
 	im, _ := ensureGray(src)
 	dst := image.NewGray(im.Bounds())
 	gradient := image.NewGray(im.Bounds())
+	level := image.NewGray(im.Bounds())
 	done()
 
 	w := im.Bounds().Size().X
@@ -181,6 +177,23 @@ func processFile(filename string) {
 	}
 	done()
 
+	done = timed("leveling image")
+	lo := float64(imagePercentile(dst, 0.0001))
+	hi := float64(imagePercentile(dst, 0.97))
+	// fmt.Println(lo, hi)
+	m := 255 / (hi - lo)
+	for i, v := range dst.Pix {
+		nv := int((float64(v)-lo)*m + 0.5)
+		if nv < 0 {
+			nv = 0
+		}
+		if nv > 255 {
+			nv = 255
+		}
+		level.Pix[i] = uint8(nv)
+	}
+	done()
+
 	done = timed("writing outputs")
 	ext := filepath.Ext(filename)
 	basename := filename[:len(filename)-len(ext)]
@@ -188,11 +201,15 @@ func processFile(filename string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = gg.SavePNG(basename+".grad.png", gradient)
+	if err != nil {
+		log.Fatal(err)
+	}
 	err = gg.SavePNG(basename+".rbgg.png", dst)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = gg.SavePNG(basename+".grad.png", gradient)
+	err = gg.SavePNG(basename+".lvld.png", level)
 	if err != nil {
 		log.Fatal(err)
 	}
