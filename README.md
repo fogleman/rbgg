@@ -2,9 +2,9 @@
 
 Isolate and remove the background gradient from images of paper.
 
-![Example](https://i.imgur.com/nuPqVgs.png)
+![Example](https://www.michaelfogleman.com/static/rbgg-before-after.png)
 
-![Steps](https://i.imgur.com/dLBVfRN.jpg)
+![Steps](https://www.michaelfogleman.com/static/rbgg-steps.png)
 
 ### Motivation
 
