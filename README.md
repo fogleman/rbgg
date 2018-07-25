@@ -19,3 +19,7 @@ Instead of trying to perfect the lighting, I wrote this software to clean up the
 ### Usage
 
     $ rbgg input.jpg
+
+### How it Works
+
+For every pixel in the image, we analyze its neighborhood (a box centered on the pixel, with size 5% x 5% of the image size by default) to determine the paper intensity in that region. The 90th percentile brightness is selected by default. The pixel is rescaled to bring this window brightness up to the target brightness. This algorithm will have trouble if certain regions are mostly ink (rather than mostly paper) and can still leave some "vignetting" at the corners of the image. Analyzing a 5% x 5% region around every pixel naively would be very slow - so the code uses some tricks to do this more efficiently.
